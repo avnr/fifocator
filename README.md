@@ -9,7 +9,7 @@ loop. The messages can be subscribed to as strings that need to be
 matched, or as regular expressions. The main loop polls the named pipe at
 an interval, and when a message subscribed to arrives it dispatches the
 subscribed function. The worker can have a function called at the polling
-interval by subscribing that function to an empty message. Sunbsribing a
+interval by subscribing that function to an empty message. Subscribing a
 function without specifying a message subscribes the function to a
 wildcard message, i.e., any message not intercepted by another subscribed
 function. If there are several subscribers that match a message then the
@@ -34,7 +34,7 @@ Subscribing a function to a message:
 my_worker.sub(f, 'message text')
 
 # subscribe to any message that matches the regular expression
-my_worker.sub(f, re.compile('^.$')
+my_worker.sub(f, re.compile('^.$'))
 
 # convenience function for subscribing to regular expressions
 my_worker.sub_re(f, '^.$')
