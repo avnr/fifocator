@@ -1,4 +1,4 @@
-# fifocator
+# Fifocator
 
 ### Named Pipes made easy
 
