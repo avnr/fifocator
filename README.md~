@@ -65,7 +65,7 @@ my_worker.run(0.1)
 To quit the main loop raise the `Quit` exception:
 
 ```
-from fifocator import FifoWorker, Quit
+from fifocator import Fifo, Quit
 
 def f(msg, name):
     print('Got some message')
@@ -74,7 +74,7 @@ def quit_(msg, name):
     raise Quit
 
 if __name__ == '__main__':
-    my_worker = FifoWorker('my_fifo_file')
+    my_worker = Fifo('my_fifo_file')
     my_worker.sub(f)
     my_worker.sub(quit_, 'quit')
     my_worker.run(0.1)
