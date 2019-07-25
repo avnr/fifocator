@@ -122,7 +122,7 @@ fifocator.py in place.
 
 You can also install it in the library using setuptools.
 
-REQUIRES PYTHON3.6 OR ABOVE.
+Linux only. REQUIRES PYTHON3.6 OR ABOVE.
 
 ### License
 
