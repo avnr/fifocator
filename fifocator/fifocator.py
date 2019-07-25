@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 #    fifocator - Named Pipes Made Easy
-#    Copyright (c) Avner Herskovits
+#    Copyright (c) 2018 - 2019 Avner Herskovits
 #
 #    MIT License
 #
@@ -27,41 +27,54 @@
 import os
 import re
 
-from errno import EAGAIN, ENXIO, EWOULDBLOCK
+from errno import EAGAIN, ENOENT, ENXIO, EWOULDBLOCK
 from os.path import exists, join
-from time import sleep
+from stat import S_ISFIFO
+from time import monotonic, sleep
 
 RE_TYPE = type(re.compile(''))  # for python3.6/3.7 compatibility
 FIFO_ROOT = '/tmp'
 
+
+class FifoDoesNotExistError(Exception):
+    """
+    This exception is raised when the destination named pipe for writing
+    a message does not exist, and after attempting to wait for a worker for
+    the number of requested retries.
+    """
+    def __init__(self,name):
+        self.message = f'The named pipe {name} does not exist.'
+
+
+class NotFifoError(Exception):
+    """
+    This exception is raised if the path of a requested named pipe points
+    to an existing file that is not a named pipe.
+    """
+    def __init__(self, name):
+        self.message=f'{name} is not a named pipe.'
+
+
 class Quit(Exception): pass
 
-class Fifo:
+
+class FifoWorker:
     """
-    Invoke a worker via messages sent over named pipes. Messages are
+    Invoke a worker that waits for messages sent over named pipes. Messages are
     single-line utf-8 strings, e.g.:
 
     $ echo my command > /tmp/myfifo.fifo
 
-    This class also provides a "put" method for implementing the client
-    side in Python.
+    Or use the FifoClient class below to create a client.
     """
 
     def __init__(self, name):
-        """
-        Create a named pipe at the given path. If the path is relative
-        then its root will be the /tmp directory.
-        """
         self.original = name
         self.subscribers = []
         self.wildcard = None
         if name[0] != os.sep:
             name = join(FIFO_ROOT, name)
         self.name = name
-        if not exists(self.name):
-            umask=os.umask(0o000)
-            os.mkfifo(name,mode=0o666)
-            os.umask(umask)
 
 
     def sub(self, callback, msg=None):
@@ -114,14 +127,22 @@ class Fifo:
     def run(self, interval):
         """
         Main loop, listen to named pipe and emit calls on each message.
+        Before starting, first ensures that the named pipe exists.
 
         Exit the main loop by raising the exception Quit.
         """
+        if not exists(self.name):
+            umask=os.umask(0o000)
+            os.mkfifo(self.name,mode=0o666)
+            os.umask(umask)
+        elif not S_ISFIFO(os.stat(self.name).st_mode):
+            raise NotFifoError(self.name)
+
         fifo = os.open(self.name, os.O_RDONLY|os.O_NONBLOCK)
         try:
             while True:
                 try:
-                    _msg = os.read(fifo,999).decode('utf-8').strip()
+                    _msg = os.read(fifo,9999).decode('utf-8').strip()
                 except OSError as err:
                     if err.errno == EAGAIN or err.errno == EWOULDBLOCK:
                         _msg = ''
@@ -135,19 +156,62 @@ class Fifo:
         os.close(fifo)
 
 
-    def put(self, msg):
+    def quit(self, *args, **kwargs):
         """
-        Write a message to a named pipe.
+        Convenience function for raising the Quit exception.
         """
-        while True:     # waits for worker
+        raise Quit
+
+
+class FifoClient:
+
+    def __init__(self, name, retries = 3, retry_interval = 0.1, guarantee_delivery = False):
+        """
+        name - the name of the named pipe, if not provided with an absolute
+            path then it is assumed to be under /tmp
+
+        retries - number of retries before failing a write operation
+
+        retry_interval - how long to wait in seconds between retry intervals
+
+        gurantee_delivery - if True and writing to the pipe fails after
+            retries then raise an exception; otherwise drop the message,
+            and don't retry in subsequent writes until another write suceeds
+        """
+        self.original = name
+        if name[0] != os.sep:
+            name = join(FIFO_ROOT, name)
+        self.name = name
+        self.retries = retries
+        self.retries_save = retries
+        self.retry_interval = retry_interval
+        self.guarantee_delivery = guarantee_delivery
+
+
+    def write(self, msg):
+        """
+        Writes a message to a named pipe.
+        """
+        fifo = None
+        while True:
             try:
                 fifo = os.open(self.name, os.O_WRONLY|os.O_NONBLOCK)
             except OSError as err:
-                if err.errno != ENXIO:
+                if err.errno != ENXIO and err.errno != ENOENT:
                     raise
+                else:
+                    if self.retries:
+                        self.retries -= 1
+                        sleep(self.retry_interval)
+                    elif self.guarantee_delivery:
+                        raise PipeDoesNotExistError(self.name)
+                    else:   # drop message
+                        break
             else:
+                self.retries = self.retries_save
+                os.write(fifo, (msg+'\n').encode('utf-8'))
                 break
-            sleep(0.1)
-        os.write(fifo, (msg+'\n').encode('utf-8'))
-        os.close(fifo)
+            finally:
+                if fifo:
+                    os.close(fifo)
 

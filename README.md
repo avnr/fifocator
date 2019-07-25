@@ -13,14 +13,14 @@ interval by subscribing that function to an empty message. Subscribing a
 function without specifying a message subscribes the function to a
 wildcard message, i.e., any message not intercepted by another subscribed
 function. If there are several subscribers that match a message then the
-first subscribed match is that one that will be called.
+first subscribed match is the one that will be called.
 
 Setting up a named pipe:
 
 ```
-from fifocator import Fifo
+from fifocator import FifoWorker
 
-my_worker = Fifo('my_fifo_file')
+my_worker = FifoWorker('my_fifo_file')
 ```
 
 In the above example the named pipe will automatically be opened at the
@@ -76,9 +76,17 @@ def quit_(msg, name):
 if __name__ == '__main__':
     my_worker = Fifo('my_fifo_file')
     my_worker.sub(f)
-    my_worker.sub(quit_,'quit')
+    my_worker.sub(quit_, 'quit')
     my_worker.run(0.1)
 ```
+
+alternatively you can use a convenience method that raises the Quit exception:
+
+```
+my_worker.sub(my_worker.quit, 'quit')
+```
+
+### The Client Side
 
 Sending messages to the named pipe can be easily done from the command line:
 
@@ -90,16 +98,19 @@ You can also use fifocator to implement the client side, first set up the
 named pipe:
 
 ```
-from fifocator import Fifo
+from fifocator import FifoClient
 
-my_client = Fifo('my_fifo_file')
+my_client = FifoClient('my_fifo_file')
 ```
 
 Write something to the pipe:
 
 ```
-my_client.put('something')
+my_client.write('something')
 ```
+
+Please read the docstring of FifoClient for some fine-grained control over
+handling write failures and retries.
 
 Check out some more examples in the code and in test.py in the test
 directory.

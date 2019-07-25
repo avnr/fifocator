@@ -55,7 +55,7 @@ import sys
 
 from time import sleep
 
-sys.path.insert(0, '..')
+#sys.path.insert(0, '..')
 import fifocator
 
 
@@ -63,7 +63,7 @@ FIFO_NAME = 'fifocator.fifo'
 
 XMISSIONS_PER_CLIENT = 1000         # To get the kick start small, eg 10
 MESSAGES_PER_XMISSION = 2
-INTERVAL_BETWEEN_XMISSIONS = 1
+INTERVAL_BETWEEN_XMISSIONS = 0.1
 CLIENT_LOAD_PER_MESSAGE = 2**16     # ~5% CPU load on a 8250U
 WORKER_LOAD_PER_MESSAGE = 2**16     #
 WORKER_INTERVAL = 0.1
@@ -93,6 +93,7 @@ def mk_load(n):
 
 def client():
     global fifo
+    fifo = fifocator.FifoClient(FIFO_NAME)
     n = distort(XMISSIONS_PER_CLIENT)
     while n:
         n -= 1
@@ -100,7 +101,7 @@ def client():
         msgs = random.choices(DICTIONARY,k=k)
         while k:
             k -=1
-            fifo.put(msgs[k])
+            fifo.write(msgs[k])
             print(msgs[k])
             mk_load(CLIENT_LOAD_PER_MESSAGE)
         sleep(INTERVAL_BETWEEN_XMISSIONS)
@@ -123,6 +124,7 @@ def worker():
     def _never_called(msg, name):
         print('Holly bologna o_O')
 
+    fifo = fifocator.FifoWorker(FIFO_NAME)
     fifo.sub(_wildcard)
     fifo.sub(_worker, '')
     fifo.sub(_worker, 'X-----')
@@ -141,7 +143,6 @@ def worker():
 
 if __name__ == '__main__':
     random.seed()
-    fifo = fifocator.Fifo(FIFO_NAME)
     if len(sys.argv) == 2 and sys.argv[1] == 'worker':
         worker()
     elif len(sys.argv) == 1:
